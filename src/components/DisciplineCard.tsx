@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState, type JSX } from "react";
+import { FormEvent, useEffect, useRef, useMemo, useState, type JSX, useCallback } from "react";
 import {
   CheckCircle,
   Clock3,
@@ -11,6 +11,32 @@ import { StatusBadge } from "./StatusBadge";
 import { TutorAvatar } from "./TutorAvatar";
 import { LearningBlocksEditor } from "./LearningBlocksEditor";
 
+// Helper function to debounce callbacks
+function useDebounce<T extends (...args: any[]) => any>(
+  callback: T,
+  delay: number
+): (...args: Parameters<T>) => void {
+  const timeoutRef = useRef<ReturnType<typeof setTimeout>>();
+
+  return useCallback(
+    (...args: Parameters<T>) => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+      timeoutRef.current = setTimeout(() => {
+        callback(...args);
+      }, delay);
+    },
+    [callback, delay]
+  );
+}
+
+export type DisciplineCardPermissions = {
+  canEdit: boolean;
+  canUpdateStatus: boolean;
+  canAssignTutor: boolean;
+};
+
 type DisciplineCardProps = {
   discipline: DisciplineRecord;
   busy?: boolean;
@@ -22,6 +48,8 @@ type DisciplineCardProps = {
     dueDate: string
   ) => Promise<void> | void;
   onAssignTutor: (id: string, tutorId: string) => Promise<void> | void;
+  permissions: DisciplineCardPermissions;
+  ownerLabel?: string;
 };
 
 const pendingLabels: Record<
@@ -48,6 +76,8 @@ export function DisciplineCard({
   onUpdate,
   onRegisterAction,
   onAssignTutor,
+  permissions,
+  ownerLabel,
 }: DisciplineCardProps) {
   const [expanded, setExpanded] = useState(false);
   const [formState, setFormState] = useState({
@@ -67,18 +97,21 @@ export function DisciplineCard({
   });
   const [tutorId, setTutorId] = useState("");
 
+  // Only reset form state when card is collapsed or discipline changes externally
   useEffect(() => {
-    setFormState({
-      name: discipline.name,
-      description: discipline.description,
-      status: discipline.status,
-      level: discipline.level,
-      tags: discipline.tags.join(", "),
-      nextReviewAt: discipline.nextReviewAt.slice(0, 10),
-    });
-    setEmenta(discipline.ementa);
-    setBlocks(discipline.learningBlocks);
-  }, [discipline]);
+    if (!expanded) {
+      setFormState({
+        name: discipline.name,
+        description: discipline.description,
+        status: discipline.status,
+        level: discipline.level,
+        tags: discipline.tags.join(", "),
+        nextReviewAt: discipline.nextReviewAt.slice(0, 10),
+      });
+      setEmenta(discipline.ementa);
+      setBlocks(discipline.learningBlocks);
+    }
+  }, [discipline, expanded]);
 
   const completionColor = useMemo(() => {
     if (discipline.stats.completionRate >= 80) return "text-emerald-300";
@@ -86,9 +119,16 @@ export function DisciplineCard({
     return "text-rose-300";
   }, [discipline.stats.completionRate]);
 
+  const debouncedSubmit = useDebounce(
+    (payload: Partial<DisciplineRecord>) => {
+      onUpdate(discipline.id, payload);
+    },
+    500 // 500ms debounce delay
+  );
+
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    onUpdate(discipline.id, {
+    debouncedSubmit({
       name: formState.name,
       description: formState.description,
       status: formState.status as DisciplineRecord["status"],
@@ -140,6 +180,11 @@ export function DisciplineCard({
               Última atualização{" "}
               {new Date(discipline.stats.updatedAt).toLocaleDateString("pt-BR")}
             </span>
+            {discipline.createdBy && (
+              <span className="text-xs text-slate-500">
+                Criada por {ownerLabel ?? discipline.createdBy}
+              </span>
+            )}
           </div>
 
           <h3 className="font-display text-2xl text-white">
@@ -253,161 +298,99 @@ export function DisciplineCard({
 
       {expanded && (
         <div className="mt-6 space-y-4">
-          <div className="grid gap-4 lg:grid-cols-2">
-            <form
-              onSubmit={handleSubmit}
-              className="rounded-2xl border border-white/5 bg-white/5 p-4"
-            >
-              <p className="text-sm font-semibold text-white">
-                Editar disciplina
-              </p>
-              <div className="mt-4 flex flex-col gap-3">
-                <label className="text-xs text-slate-400">
-                  Nome
-                  <input
-                    className="mt-1 w-full rounded-xl bg-black/20 px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-brand-400"
-                    value={formState.name}
-                    onChange={(event) =>
-                      setFormState((prev) => ({
-                        ...prev,
-                        name: event.target.value,
-                      }))
-                    }
-                    required
-                  />
-                </label>
-                <label className="text-xs text-slate-400">
-                  Descrição
-                  <textarea
-                    className="mt-1 min-h-[90px] w-full rounded-xl bg-black/20 px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-brand-400"
-                    value={formState.description}
-                    onChange={(event) =>
-                      setFormState((prev) => ({
-                        ...prev,
-                        description: event.target.value,
-                      }))
-                    }
-                  />
-                </label>
-                <div className="grid gap-3 md:grid-cols-2">
-                <label className="text-xs text-slate-400">
-                  Status
-                  <select
-                    className="mt-1 w-full rounded-xl bg-black/20 px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-brand-400"
-                    value={formState.status}
-                    onChange={(event) =>
-                      setFormState((prev) => ({
-                        ...prev,
-                        status: event.target.value as DisciplineRecord["status"],
-                      }))
-                    }
-                  >
-                    <option value="ativa">Ativa</option>
-                    <option value="planejamento">Planejamento</option>
-                      <option value="pausada">Pausada</option>
-                    </select>
-                  </label>
-                  <label className="text-xs text-slate-400">
-                    Nível
-                    <input
-                      className="mt-1 w-full rounded-xl bg-black/20 px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-brand-400"
-                      value={formState.level}
-                      onChange={(event) =>
-                        setFormState((prev) => ({
-                          ...prev,
-                          level: event.target.value,
-                        }))
-                      }
-                    />
-                  </label>
-                </div>
-                <label className="text-xs text-slate-400">
-                  Tags (separadas por vírgula)
-                  <input
-                    className="mt-1 w-full rounded-xl bg-black/20 px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-brand-400"
-                    value={formState.tags}
-                    onChange={(event) =>
-                      setFormState((prev) => ({
-                        ...prev,
-                        tags: event.target.value,
-                      }))
-                    }
-                  />
-                </label>
-                <label className="text-xs text-slate-400">
-                  Revisão
-                  <input
-                    type="date"
-                    className="mt-1 w-full rounded-xl bg-black/20 px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-brand-400"
-                    value={formState.nextReviewAt}
-                    onChange={(event) =>
-                      setFormState((prev) => ({
-                        ...prev,
-                        nextReviewAt: event.target.value,
-                      }))
-                    }
-                  />
-                </label>
-              </div>
-              <button
-                type="submit"
-                disabled={busy}
-                className="mt-4 inline-flex items-center justify-center rounded-2xl bg-brand-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-400 disabled:opacity-60"
-              >
-                Salvar alterações
-              </button>
-            </form>
-
-            <div className="space-y-4">
+          {permissions.canEdit ? (
+            <div className="grid gap-4 lg:grid-cols-2">
               <form
-                onSubmit={handleActionSubmit}
+                onSubmit={handleSubmit}
                 className="rounded-2xl border border-white/5 bg-white/5 p-4"
               >
                 <p className="text-sm font-semibold text-white">
-                  Registrar ação
+                  Editar disciplina
                 </p>
-                <div className="mt-4 grid gap-3">
+                <div className="mt-4 flex flex-col gap-3">
                   <label className="text-xs text-slate-400">
-                    Descrição
+                    Nome
                     <input
                       className="mt-1 w-full rounded-xl bg-black/20 px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-brand-400"
-                      value={actionForm.label}
+                      value={formState.name}
                       onChange={(event) =>
-                        setActionForm((prev) => ({
+                        setFormState((prev) => ({
                           ...prev,
-                          label: event.target.value,
+                          name: event.target.value,
                         }))
                       }
-                      placeholder="Ex.: Revisar plano de aula"
+                      required
                     />
                   </label>
                   <label className="text-xs text-slate-400">
-                    Tipo
-                    <select
-                      className="mt-1 w-full rounded-xl bg-black/20 px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-brand-400"
-                      value={actionForm.type}
+                    Descrição
+                    <textarea
+                      className="mt-1 min-h-[90px] w-full rounded-xl bg-black/20 px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-brand-400"
+                      value={formState.description}
                       onChange={(event) =>
-                        setActionForm((prev) => ({
+                        setFormState((prev) => ({
                           ...prev,
-                          type: event.target.value as DisciplineRecord["pendingActions"][number]["type"],
+                          description: event.target.value,
                         }))
                       }
-                    >
-                      <option value="atualizacao">Atualização</option>
-                      <option value="feedback">Feedback</option>
-                      <option value="mentoria">Mentoria</option>
-                    </select>
+                    />
+                  </label>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <label className="text-xs text-slate-400">
+                      Status
+                      <select
+                        className="mt-1 w-full rounded-xl bg-black/20 px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-brand-400"
+                        value={formState.status}
+                        onChange={(event) =>
+                          setFormState((prev) => ({
+                            ...prev,
+                            status: event.target.value as DisciplineRecord["status"],
+                          }))
+                        }
+                        disabled={!permissions.canUpdateStatus}
+                      >
+                        <option value="ativa">Ativa</option>
+                        <option value="planejamento">Planejamento</option>
+                        <option value="pausada">Pausada</option>
+                      </select>
+                    </label>
+                    <label className="text-xs text-slate-400">
+                      Nível
+                      <input
+                        className="mt-1 w-full rounded-xl bg-black/20 px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-brand-400"
+                        value={formState.level}
+                        onChange={(event) =>
+                          setFormState((prev) => ({
+                            ...prev,
+                            level: event.target.value,
+                          }))
+                        }
+                      />
+                    </label>
+                  </div>
+                  <label className="text-xs text-slate-400">
+                    Tags (separadas por vírgula)
+                    <input
+                      className="mt-1 w-full rounded-xl bg-black/20 px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-brand-400"
+                      value={formState.tags}
+                      onChange={(event) =>
+                        setFormState((prev) => ({
+                          ...prev,
+                          tags: event.target.value,
+                        }))
+                      }
+                    />
                   </label>
                   <label className="text-xs text-slate-400">
-                    Prazo
+                    Revisão
                     <input
                       type="date"
                       className="mt-1 w-full rounded-xl bg-black/20 px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-brand-400"
-                      value={actionForm.dueDate}
+                      value={formState.nextReviewAt}
                       onChange={(event) =>
-                        setActionForm((prev) => ({
+                        setFormState((prev) => ({
                           ...prev,
-                          dueDate: event.target.value,
+                          nextReviewAt: event.target.value,
                         }))
                       }
                     />
@@ -416,75 +399,158 @@ export function DisciplineCard({
                 <button
                   type="submit"
                   disabled={busy}
-                  className="mt-4 inline-flex items-center justify-center rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/10 disabled:opacity-60"
+                  className="mt-4 inline-flex items-center justify-center rounded-2xl bg-brand-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-400 disabled:opacity-60"
                 >
-                  Adicionar à trilha
+                  Salvar alterações
                 </button>
+                {!permissions.canUpdateStatus && (
+                  <p className="mt-2 text-xs text-amber-200">
+                    Você não pode alterar o status desta disciplina.
+                  </p>
+                )}
               </form>
 
-              <form
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  if (!tutorId) return;
-                  onAssignTutor(discipline.id, tutorId);
-                  setTutorId("");
-                }}
-                className="rounded-2xl border border-dashed border-white/15 bg-black/20 p-4"
-              >
-                <p className="text-sm font-semibold text-white">
-                  Vincular novo tutor
-                </p>
-                <label className="mt-3 block text-xs text-slate-400">
-                  ID ou e-mail do tutor
-                  <input
-                    className="mt-1 w-full rounded-xl bg-transparent px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-brand-400"
-                    placeholder="tutor_123 ou ana@escolaonline.com"
-                    value={tutorId}
-                    onChange={(event) => setTutorId(event.target.value)}
+              <div className="space-y-4">
+                <form
+                  onSubmit={handleActionSubmit}
+                  className="rounded-2xl border border-white/5 bg-white/5 p-4"
+                >
+                  <p className="text-sm font-semibold text-white">
+                    Registrar ação
+                  </p>
+                  <div className="mt-4 grid gap-3">
+                    <label className="text-xs text-slate-400">
+                      Descrição
+                      <input
+                        className="mt-1 w-full rounded-xl bg-black/20 px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-brand-400"
+                        value={actionForm.label}
+                        onChange={(event) =>
+                          setActionForm((prev) => ({
+                            ...prev,
+                            label: event.target.value,
+                          }))
+                        }
+                        placeholder="Ex.: Revisar plano de aula"
+                      />
+                    </label>
+                    <label className="text-xs text-slate-400">
+                      Tipo
+                      <select
+                        className="mt-1 w-full rounded-xl bg-black/20 px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-brand-400"
+                        value={actionForm.type}
+                        onChange={(event) =>
+                          setActionForm((prev) => ({
+                            ...prev,
+                            type: event.target.value as DisciplineRecord["pendingActions"][number]["type"],
+                          }))
+                        }
+                      >
+                        <option value="atualizacao">Atualização</option>
+                        <option value="feedback">Feedback</option>
+                        <option value="mentoria">Mentoria</option>
+                      </select>
+                    </label>
+                    <label className="text-xs text-slate-400">
+                      Prazo
+                      <input
+                        type="date"
+                        className="mt-1 w-full rounded-xl bg-black/20 px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-brand-400"
+                        value={actionForm.dueDate}
+                        onChange={(event) =>
+                          setActionForm((prev) => ({
+                            ...prev,
+                            dueDate: event.target.value,
+                          }))
+                        }
+                      />
+                    </label>
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={busy}
+                    className="mt-4 inline-flex items-center justify-center rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/10 disabled:opacity-60"
+                  >
+                    Adicionar à trilha
+                  </button>
+                </form>
+
+                <form
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    if (!tutorId || !permissions.canAssignTutor) return;
+                    onAssignTutor(discipline.id, tutorId);
+                    setTutorId("");
+                  }}
+                  className="rounded-2xl border border-dashed border-white/15 bg-black/20 p-4"
+                >
+                  <p className="text-sm font-semibold text-white">
+                    Vincular novo tutor
+                  </p>
+                  <label className="mt-3 block text-xs text-slate-400">
+                    ID ou e-mail do tutor
+                    <input
+                      className="mt-1 w-full rounded-xl bg-transparent px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-brand-400"
+                      placeholder="tutor_123 ou ana@escolaonline.com"
+                      value={tutorId}
+                      onChange={(event) => setTutorId(event.target.value)}
+                      disabled={!permissions.canAssignTutor}
+                    />
+                  </label>
+                  <button
+                    type="submit"
+                    disabled={busy || !permissions.canAssignTutor}
+                    className="mt-4 inline-flex items-center justify-center rounded-2xl bg-brand-500/80 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-500 disabled:opacity-60"
+                  >
+                    Convidar tutor
+                  </button>
+                  {!permissions.canAssignTutor && (
+                    <p className="mt-2 text-xs text-amber-200">
+                      Apenas o master pode adicionar novos tutores.
+                    </p>
+                  )}
+                </form>
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-5 text-sm text-slate-300">
+              Você não possui permissão para editar esta disciplina. Solicite acesso ao master ou ao criador.
+            </div>
+          )}
+
+          {permissions.canEdit && (
+            <form
+              onSubmit={handleCurriculumSubmit}
+              className="rounded-2xl border border-white/5 bg-white/5 p-4"
+            >
+              <p className="text-sm font-semibold text-white">
+                Ementa e blocos
+              </p>
+              <div className="mt-4 space-y-4">
+                <label className="text-xs text-slate-400">
+                  Ementa (visão geral)
+                  <textarea
+                    className="mt-1 min-h-[120px] w-full rounded-2xl bg-black/20 px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-brand-400"
+                    value={ementa}
+                    onChange={(event) => setEmenta(event.target.value)}
+                    placeholder="Descreva os objetivos gerais e metodologia…"
                   />
                 </label>
+                <LearningBlocksEditor value={blocks} onChange={setBlocks} />
+              </div>
+              <div className="mt-4 flex justify-end">
                 <button
                   type="submit"
                   disabled={busy}
-                  className="mt-4 inline-flex items-center justify-center rounded-2xl bg-brand-500/80 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-500 disabled:opacity-60"
+                  className="inline-flex items-center justify-center rounded-2xl bg-brand-500/90 px-5 py-2 text-sm font-semibold text-white transition hover:bg-brand-500 disabled:opacity-60"
                 >
-                  Convidar tutor
+                  Salvar ementa & blocos
                 </button>
-              </form>
-            </div>
-          </div>
-
-          <form
-            onSubmit={handleCurriculumSubmit}
-            className="rounded-2xl border border-white/5 bg-white/5 p-4"
-          >
-            <p className="text-sm font-semibold text-white">
-              Ementa e blocos
-            </p>
-            <div className="mt-4 space-y-4">
-              <label className="text-xs text-slate-400">
-                Ementa (visão geral)
-                <textarea
-                  className="mt-1 min-h-[120px] w-full rounded-2xl bg-black/20 px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-brand-400"
-                  value={ementa}
-                  onChange={(event) => setEmenta(event.target.value)}
-                  placeholder="Descreva os objetivos gerais e metodologia…"
-                />
-              </label>
-              <LearningBlocksEditor value={blocks} onChange={setBlocks} />
-            </div>
-            <div className="mt-4 flex justify-end">
-              <button
-                type="submit"
-                disabled={busy}
-                className="inline-flex items-center justify-center rounded-2xl bg-brand-500/90 px-5 py-2 text-sm font-semibold text-white transition hover:bg-brand-500 disabled:opacity-60"
-              >
-                Salvar ementa & blocos
-              </button>
-            </div>
-          </form>
+              </div>
+            </form>
+          )}
         </div>
       )}
+
     </article>
   );
 }

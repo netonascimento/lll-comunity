@@ -8,6 +8,8 @@ type HeroSectionProps = {
   onFiltersChange: (value: Partial<DashboardFilters>) => void;
   onRefresh: () => void;
   onNewDiscipline: () => void;
+  canCreateDiscipline: boolean;
+  createDisabledReason?: string;
   loading: boolean;
   updating: boolean;
 };
@@ -25,6 +27,8 @@ export function HeroSection({
   onFiltersChange,
   onRefresh,
   onNewDiscipline,
+  canCreateDiscipline,
+  createDisabledReason,
   loading,
   updating,
 }: HeroSectionProps) {
@@ -47,7 +51,8 @@ export function HeroSection({
         <div className="flex flex-col gap-3 sm:flex-row">
           <button
             onClick={onNewDiscipline}
-            className="inline-flex items-center justify-center rounded-2xl bg-brand-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-400"
+            disabled={!canCreateDiscipline}
+            className="inline-flex items-center justify-center rounded-2xl bg-brand-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-400 disabled:cursor-not-allowed disabled:opacity-40"
           >
             Nova disciplina
           </button>
@@ -61,6 +66,10 @@ export function HeroSection({
           </button>
         </div>
       </div>
+
+      {!canCreateDiscipline && createDisabledReason && (
+        <p className="mt-2 text-xs text-amber-200">{createDisabledReason}</p>
+      )}
 
       <div className="mt-8 flex flex-col gap-4 md:flex-row">
         <label className="flex-1">

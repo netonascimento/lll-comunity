@@ -102,6 +102,7 @@ export const FALLBACK_DASHBOARD: DashboardData = {
           ],
         },
       ],
+      createdBy: "user-master",
     },
     {
       id: "disc-02",
@@ -193,6 +194,7 @@ export const FALLBACK_DASHBOARD: DashboardData = {
           ],
         },
       ],
+      createdBy: "user-tutor",
     },
     {
       id: "disc-03",
@@ -260,6 +262,7 @@ export const FALLBACK_DASHBOARD: DashboardData = {
           ],
         },
       ],
+      createdBy: "user-professor",
     },
   ],
   timeline: [
@@ -289,3 +292,66 @@ export const FALLBACK_DASHBOARD: DashboardData = {
     },
   ],
 };
+
+export const FALLBACK_COURSES = [
+  {
+    id: "course-01",
+    name: "Formação STEAM",
+    description:
+      "Curso completo com trilhas de Matemática Aplicada e Linguagens conectado a projetos interdisciplinares.",
+    coverUrl:
+      "https://images.unsplash.com/photo-1503676260728-1c00da094a0b?auto=format&fit=crop&w=900&q=60",
+    createdBy: "user-master",
+    disciplineIds: ["disc-01", "disc-02"],
+    turmas: [
+      {
+        id: "turma-01",
+        name: "Turma Alfa",
+        period: "2024.2",
+        startsAt: "2024-07-01",
+        endsAt: "2024-12-15",
+        mentor: "Ana Viana",
+        students: 36,
+      },
+      {
+        id: "turma-02",
+        name: "Turma Beta",
+        period: "2024.2",
+        startsAt: "2024-08-01",
+        endsAt: "2024-12-20",
+        mentor: "Lucas Amaral",
+        students: 28,
+      },
+    ],
+  },
+  {
+    id: "course-02",
+    name: "Comunicações Multiletramentos",
+    description:
+      "Experiências narrativas e produção audiovisual para comunidades escolares.",
+    createdBy: "user-tutor",
+    coverUrl:
+      "https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?auto=format&fit=crop&w=900&q=60",
+    disciplineIds: ["disc-02"],
+    turmas: [
+      {
+        id: "turma-03",
+        name: "Laboratório Voz",
+        period: "2024.2",
+        startsAt: "2024-06-15",
+        endsAt: "2024-10-30",
+        mentor: "Joana Santos",
+        students: 42,
+      },
+    ],
+  },
+];
+
+export const FALLBACK_ENROLLMENTS = [
+  {
+    userId: "user-aluno",
+    courseId: "course-01",
+    turmaId: "turma-01",
+    progress: 0.42,
+  },
+];

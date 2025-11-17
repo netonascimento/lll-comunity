@@ -51,6 +51,7 @@ export interface DisciplineRecord {
     dueDate: string;
   }[];
   learningBlocks: LearningBlock[];
+  createdBy: string;
 }
 
 export interface DashboardSummary {

@@ -16,7 +16,7 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 export const supabase =
   supabaseUrl && supabaseAnonKey
     ? createClient(supabaseUrl, supabaseAnonKey, {
-        auth: { persistSession: false },
+        auth: { persistSession: true, detectSessionInUrl: true },
       })
     : null;
 
@@ -54,6 +54,7 @@ type SupabaseDisciplineRow = {
   tags?: string[] | null;
   cover_url?: string | null;
   next_review_at?: string | null;
+  created_by?: string | null;
   stats?: SupabaseDisciplineStatsRow | SupabaseDisciplineStatsRow[] | null;
   objectives?: { text: string }[] | null;
   pending_actions?: SupabasePendingActionRow[] | null;
@@ -124,6 +125,7 @@ const normalizeDiscipline = (row: SupabaseDisciplineRow): DisciplineRecord => {
       dueDate: action.due_date,
     })),
     learningBlocks: (row.learning_blocks ?? []).map(normalizeLearningBlock),
+    createdBy: row.created_by ?? "",
   };
 };
 
@@ -191,6 +193,7 @@ export async function fetchDashboardData(): Promise<DashboardData> {
         tags,
         cover_url,
         next_review_at,
+        created_by,
         stats:discipline_stats (
           active_students,
           completion_rate,

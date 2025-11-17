@@ -259,6 +259,14 @@ function ResourceForm({
   onSubmit,
   cta,
 }: ResourceFormProps) {
+  const isDisabled =
+    value.title.trim().length === 0 || value.url.trim().length === 0;
+
+  const handleClick = () => {
+    if (isDisabled) return;
+    onSubmit();
+  };
+
   return (
     <div className="rounded-2xl border border-dashed border-white/15 bg-black/10 p-3 text-xs text-slate-400">
       <input
@@ -275,11 +283,17 @@ function ResourceForm({
       />
       <button
         type="button"
-        onClick={onSubmit}
-        className="mt-3 inline-flex w-full items-center justify-center rounded-2xl border border-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/10"
+        onClick={handleClick}
+        disabled={isDisabled}
+        className="mt-3 inline-flex w-full items-center justify-center rounded-2xl border border-white/10 px-3 py-2 text-xs font-semibold text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
       >
         {cta}
       </button>
+      {isDisabled && (
+        <p className="mt-1 text-[11px] text-rose-200">
+          Preencha título e link para liberar
+        </p>
+      )}
     </div>
   );
 }

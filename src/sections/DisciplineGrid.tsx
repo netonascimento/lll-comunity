@@ -1,5 +1,8 @@
 import { DisciplineRecord } from "@/types/dashboard";
-import { DisciplineCard } from "@/components/DisciplineCard";
+import {
+  DisciplineCard,
+  DisciplineCardPermissions,
+} from "@/components/DisciplineCard";
 
 type DisciplineGridProps = {
   disciplines: DisciplineRecord[];
@@ -12,6 +15,8 @@ type DisciplineGridProps = {
     dueDate: string
   ) => Promise<void> | void;
   onAssignTutor: (id: string, tutorId: string) => Promise<void> | void;
+  getCardPermissions: (discipline: DisciplineRecord) => DisciplineCardPermissions;
+  resolveOwnerName?: (userId: string) => string | undefined;
 };
 
 export function DisciplineGrid({
@@ -20,6 +25,8 @@ export function DisciplineGrid({
   onUpdate,
   onRegisterAction,
   onAssignTutor,
+  getCardPermissions,
+  resolveOwnerName,
 }: DisciplineGridProps) {
   if (disciplines.length === 0) {
     return (
@@ -39,6 +46,8 @@ export function DisciplineGrid({
           onUpdate={onUpdate}
           onRegisterAction={onRegisterAction}
           onAssignTutor={onAssignTutor}
+          permissions={getCardPermissions(discipline)}
+          ownerLabel={resolveOwnerName?.(discipline.createdBy)}
         />
       ))}
     </section>

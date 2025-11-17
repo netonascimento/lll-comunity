@@ -19,6 +19,7 @@ export type CreateDisciplinePayload = {
   nextReviewAt: string;
   learningBlocks: LearningBlock[];
   coverUrl?: string;
+  createdBy: string;
 };
 
 const defaultFilters: DashboardFilters = {
@@ -183,6 +184,7 @@ export function useDisciplineDashboard() {
             status: payload.status,
             next_review_at: payload.nextReviewAt,
             learning_blocks: payload.learningBlocks,
+            created_by: payload.createdBy,
           });
 
           if (insertError) {
@@ -213,6 +215,7 @@ export function useDisciplineDashboard() {
             nextReviewAt: payload.nextReviewAt,
             pendingActions: [],
             learningBlocks: payload.learningBlocks,
+            createdBy: payload.createdBy,
           };
 
           setData((previous) => ({

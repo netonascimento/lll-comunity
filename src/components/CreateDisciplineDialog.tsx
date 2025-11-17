@@ -10,6 +10,7 @@ type CreateDisciplineDialogProps = {
   onClose: () => void;
   onSubmit: (payload: CreateDisciplinePayload) => Promise<void> | void;
   busy?: boolean;
+  currentUserId?: string;
 };
 
 const makeDefaultBlock = (): LearningBlock => ({
@@ -27,6 +28,7 @@ export function CreateDisciplineDialog({
   onClose,
   onSubmit,
   busy,
+  currentUserId,
 }: CreateDisciplineDialogProps) {
   const [formState, setFormState] = useState({
     name: "",
@@ -41,15 +43,25 @@ export function CreateDisciplineDialog({
   });
   const [blocks, setBlocks] = useState<LearningBlock[]>(() => [makeDefaultBlock()]);
 
-  const isValid = useMemo(
-    () =>
-      formState.name.trim().length > 3 &&
-      formState.code.trim().length > 2 &&
-      formState.description.trim().length > 10 &&
-      formState.ementa.trim().length > 10 &&
-      blocks.length > 0,
-    [formState, blocks]
-  );
+  const validation = useMemo(() => {
+    const issues: string[] = [];
+    if (formState.name.trim().length <= 3) {
+      issues.push("Nome precisa de pelo menos 4 caracteres.");
+    }
+    if (formState.code.trim().length <= 2) {
+      issues.push("Código precisa de pelo menos 3 caracteres.");
+    }
+    if (formState.description.trim().length <= 10) {
+      issues.push("Descreva brevemente a disciplina (mínimo ~10 caracteres).");
+    }
+    if (formState.ementa.trim().length <= 10) {
+      issues.push("Inclua uma ementa detalhada (mínimo ~10 caracteres).");
+    }
+    if (blocks.length === 0) {
+      issues.push("Adicione ao menos um bloco de aprendizado.");
+    }
+    return { valid: issues.length === 0, issues };
+  }, [formState, blocks]);
 
   const resetForm = () => {
     setFormState({
@@ -68,7 +80,7 @@ export function CreateDisciplineDialog({
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!isValid) return;
+    if (!validation.valid || !currentUserId) return;
 
     const payload: CreateDisciplinePayload = {
       name: formState.name.trim(),
@@ -84,6 +96,7 @@ export function CreateDisciplineDialog({
       nextReviewAt: formState.nextReviewAt,
       learningBlocks: blocks,
       coverUrl: formState.coverUrl.trim() || undefined,
+      createdBy: currentUserId,
     };
 
     try {
@@ -261,12 +274,22 @@ export function CreateDisciplineDialog({
               </button>
               <button
                 type="submit"
-                disabled={!isValid || busy}
+                disabled={!validation.valid || busy || !currentUserId}
                 className="inline-flex items-center justify-center rounded-2xl bg-brand-500 px-5 py-2 text-sm font-semibold text-white transition hover:bg-brand-400 disabled:opacity-50"
               >
                 Criar disciplina
               </button>
             </div>
+            {(!validation.valid || !currentUserId) && (
+              <ul className="list-disc pl-5 text-[12px] text-rose-200">
+                {validation.issues.map((issue) => (
+                  <li key={issue}>{issue}</li>
+                ))}
+                {!currentUserId && (
+                  <li>Necessário estar autenticado para criar.</li>
+                )}
+              </ul>
+            )}
           </div>
         </form>
       </div>
