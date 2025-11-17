@@ -50,6 +50,7 @@ type DisciplineCardProps = {
   onAssignTutor: (id: string, tutorId: string) => Promise<void> | void;
   permissions: DisciplineCardPermissions;
   ownerLabel?: string;
+  onView?: (discipline: DisciplineRecord) => void;
 };
 
 const pendingLabels: Record<
@@ -78,6 +79,7 @@ export function DisciplineCard({
   onAssignTutor,
   permissions,
   ownerLabel,
+  onView,
 }: DisciplineCardProps) {
   const [expanded, setExpanded] = useState(false);
   const [formState, setFormState] = useState({
@@ -210,12 +212,22 @@ export function DisciplineCard({
           </div>
         </div>
 
-        <button
-          onClick={() => setExpanded((prev) => !prev)}
-          className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/10"
-        >
-          {expanded ? "Fechar painel" : "Abrir painel"}
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setExpanded((prev) => !prev)}
+            className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/10"
+          >
+            {expanded ? "Fechar edição" : "Editar"}
+          </button>
+          {onView && (
+            <button
+              onClick={() => onView(discipline)}
+              className="rounded-2xl border border-brand-500/30 bg-brand-500/10 px-4 py-2 text-sm font-medium text-brand-300 transition hover:bg-brand-500/20"
+            >
+              Abrir disciplina
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="mt-6 grid gap-4 text-sm text-slate-200 sm:grid-cols-3">

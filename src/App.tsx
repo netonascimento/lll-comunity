@@ -8,6 +8,7 @@ import { ActivityTimeline } from "@/sections/ActivityTimeline";
 import { useDisciplineDashboard } from "@/hooks/useDisciplineDashboard";
 import { useAuth } from "@/hooks/useAuth";
 import { LoginPage } from "@/pages/LoginPage";
+import { DisciplineViewPage } from "@/pages/DisciplineViewPage";
 import { useUserDirectory } from "@/hooks/useUserDirectory";
 import { DisciplineRecord } from "@/types/dashboard";
 import { useCourseManager } from "@/hooks/useCourseManager";
@@ -16,6 +17,7 @@ import { StudentCoursesSection } from "@/sections/StudentCoursesSection";
 import { MainMenu } from "@/components/MainMenu";
 import { TrackManagementPanel } from "@/sections/TrackManagementPanel";
 import { UserRolePanel } from "@/sections/UserRolePanel";
+import { AccessManagementPanel } from "@/sections/AccessManagementPanel";
 
 function LoadingPlaceholder() {
   return (
@@ -33,11 +35,13 @@ type SectionKey =
   | "tracks"
   | "disciplines"
   | "tutors"
-  | "students";
+  | "students"
+  | "access";
 
 export default function App() {
   const [createOpen, setCreateOpen] = useState(false);
   const [activeSection, setActiveSection] = useState<SectionKey>("dashboard");
+  const [viewingDiscipline, setViewingDiscipline] = useState<DisciplineRecord | null>(null);
   const {
     user,
     loading: authLoading,
@@ -116,12 +120,25 @@ export default function App() {
     return <LoginPage />;
   }
 
+  // Se estiver visualizando uma disciplina, mostra a página de visualização
+  if (viewingDiscipline) {
+    return (
+      <DisciplineViewPage
+        discipline={viewingDiscipline}
+        onBack={() => setViewingDiscipline(null)}
+      />
+    );
+  }
+
   const handleLogout = async () => {
+    console.log("handleLogout chamado");
     // Reset all local state before logout to prevent data leakage between users
     setCreateOpen(false);
     setActiveSection("dashboard");
     setFilters({ search: "", status: "todas" });
+    console.log("Chamando função logout...");
     await logout();
+    console.log("Logout finalizado");
   };
 
   const canCreate = permissions.canCreateDiscipline;
@@ -131,6 +148,7 @@ export default function App() {
     { key: "disciplines", label: "Disciplinas" },
     { key: "tutors", label: "Tutores", disabled: !permissions.canManageUsers },
     { key: "students", label: "Alunos", disabled: !permissions.canManageUsers },
+    { key: "access", label: "Gestão de Acesso", disabled: user.role !== "master" },
   ];
 
   return (
@@ -193,6 +211,7 @@ export default function App() {
               onAssignTutor={assignTutor}
               getCardPermissions={getCardPermissions}
               resolveOwnerName={resolveOwnerName}
+              onViewDiscipline={(discipline) => setViewingDiscipline(discipline)}
             />
           )}
 
@@ -263,6 +282,7 @@ export default function App() {
               onAssignTutor={assignTutor}
               getCardPermissions={getCardPermissions}
               resolveOwnerName={resolveOwnerName}
+              onViewDiscipline={(discipline: DisciplineRecord) => setViewingDiscipline(discipline)}
             />
           )}
         </section>
@@ -294,6 +314,10 @@ export default function App() {
           onUpdateStatus={updateStatus}
           canManage={permissions.canManageUsers}
         />
+      )}
+
+      {activeSection === "access" && user.role === "master" && (
+        <AccessManagementPanel currentUserRole={user.role} />
       )}
 
       <CreateDisciplineDialog

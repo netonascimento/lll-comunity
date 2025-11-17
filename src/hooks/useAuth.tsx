@@ -100,20 +100,59 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   const loadProfile = useCallback(
     async (sessionUser: User | null) => {
-      if (!supabase || !sessionUser) return;
-      const { data, error: selectError, status } = await supabase
+      console.log("loadProfile chamado com user:", sessionUser?.id);
+      if (!supabase || !sessionUser) {
+        console.log("Sem supabase ou sessionUser, abortando");
+        return;
+      }
+      
+      console.log("Buscando perfil do usuário no banco...");
+      
+      // Timeout de 5 segundos para evitar travamento
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error("Timeout ao buscar perfil")), 5000);
+      });
+      
+      const queryPromise = supabase
         .from("profiles")
         .select("id, email, display_name, role, status, avatar_url")
         .eq("id", sessionUser.id)
         .maybeSingle();
-
-      if (selectError && status !== 406) {
-        console.error(selectError);
-        setError("Não conseguimos carregar seu perfil.");
+      
+      let data, selectError, status;
+      
+      try {
+        const result = await Promise.race([queryPromise, timeoutPromise]) as any;
+        data = result.data;
+        selectError = result.error;
+        status = result.status;
+        console.log("Resposta do banco:", { data, error: selectError, status });
+      } catch (err) {
+        console.error("Erro ou timeout na query:", err);
+        // Fallback: usar usuário mock se disponível
+        const mockUser = MOCK_USERS.find(u => u.email === sessionUser.email);
+        if (mockUser) {
+          console.log("Usando usuário mock como fallback:", mockUser);
+          setUser(mockUser);
+          setLoading(false);
+          return;
+        }
+        setError("Timeout ao conectar com banco de dados.");
+        setLoading(false);
         return;
       }
 
+      if (selectError && status !== 406) {
+        console.error("Erro ao buscar perfil:", selectError);
+        setError("Não conseguimos carregar seu perfil.");
+        setLoading(false);
+        return;
+      }
+      
+      console.log("Perfil encontrado:", data);
+
       if (!data) {
+        console.log("Perfil não encontrado, tentando criar...");
         const { data: inserted, error: insertError } = await supabase
           .from("profiles")
           .insert({
@@ -122,7 +161,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
             display_name:
               (sessionUser.user_metadata as Record<string, string> | undefined)?.full_name ??
               sessionUser.email,
-            role: "tutor",
+            role: "aluno",
             status: "active",
             avatar_url:
               (sessionUser.user_metadata as Record<string, string> | undefined)?.avatar_url ??
@@ -130,30 +169,41 @@ export function AuthProvider({ children }: PropsWithChildren) {
           })
           .select("id, email, display_name, role, status, avatar_url")
           .single();
+          
+        console.log("Resultado da inserção:", { inserted, error: insertError });
+        
         if (insertError || !inserted) {
-          console.error(insertError);
+          console.error("Erro ao criar perfil:", insertError);
           setError("Não conseguimos criar seu perfil.");
+          setLoading(false);
           return;
         }
-        setUser({
+        
+        const newUserProfile = {
           id: inserted.id,
           email: inserted.email,
           name: inserted.display_name ?? inserted.email,
           role: inserted.role as UserRole,
           status: inserted.status,
           avatarUrl: inserted.avatar_url ?? undefined,
-        });
+        };
+        console.log("Perfil criado com sucesso:", newUserProfile);
+        setUser(newUserProfile);
+        setLoading(false);
         return;
       }
 
-      setUser({
+      const userProfile = {
         id: data.id,
         email: data.email,
         name: data.display_name ?? data.email,
         role: data.role as UserRole,
         status: data.status,
         avatarUrl: data.avatar_url ?? undefined,
-      });
+      };
+      console.log("Setando user:", userProfile);
+      setUser(userProfile);
+      setLoading(false);
     },
     []
   );
@@ -167,23 +217,27 @@ export function AuthProvider({ children }: PropsWithChildren) {
     }
 
     const loadSession = async () => {
+      console.log("Carregando sessão inicial...");
       const { data } = await client.auth.getSession();
       if (data.session) {
+        console.log("Sessão encontrada, carregando perfil");
         await loadProfile(data.session.user);
+      } else {
+        console.log("Nenhuma sessão encontrada");
       }
+      setLoading(false);
     };
 
     loadSession();
     const { data: listener } = client.auth.onAuthStateChange(
       async (event, session) => {
+        console.log("Auth state changed:", event, session?.user?.id);
         if (session?.user) {
           await loadProfile(session.user);
         } else {
           setUser(null);
         }
-        if (event === "INITIAL_SESSION") {
-          setLoading(false);
-        }
+        setLoading(false);
       }
     );
 
@@ -195,26 +249,35 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   const login = useCallback(
     async ({ email, password }: { email: string; password: string }) => {
+      console.log("Login iniciado com:", email);
       setError(null);
+      
       if (!supabase) {
+        console.log("Modo offline - buscando mock user");
         const mock = findMockUser(email, password);
         if (!mock) {
+          console.error("Mock user não encontrado");
           throw new Error("Credenciais inválidas no modo offline.");
         }
+        console.log("Mock user encontrado:", mock);
         setUser(mock);
         return;
       }
 
+      console.log("Tentando login no Supabase...");
       const { data, error: authError } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
       if (authError || !data.session) {
+        console.error("Erro no Supabase:", authError);
         throw authError ?? new Error("Falha ao autenticar.");
       }
 
+      console.log("Login no Supabase bem-sucedido, carregando perfil...");
       await loadProfile(data.session.user);
+      console.log("Login completo!");
     },
     [loadProfile]
   );
@@ -298,10 +361,18 @@ export function AuthProvider({ children }: PropsWithChildren) {
   );
 
   const logout = useCallback(async () => {
-    if (supabase) {
-      await supabase.auth.signOut();
+    console.log("Logout iniciado...");
+    try {
+      if (supabase) {
+        console.log("Fazendo signOut no Supabase...");
+        await supabase.auth.signOut();
+      }
+      console.log("Limpando usuário local...");
+      setUser(null);
+      console.log("Logout completo!");
+    } catch (err) {
+      console.error("Erro no logout:", err);
     }
-    setUser(null);
   }, []);
 
   const permissions = useMemo(() => buildPermissions(user?.role), [user]);

@@ -169,10 +169,12 @@ export function useDisciplineDashboard() {
 
   const createDiscipline = useCallback(
     async (payload: CreateDisciplinePayload) => {
+      console.log("createDiscipline chamado com payload:", payload);
       setUpdating(true);
       setError(null);
       try {
         if (supabase) {
+          console.log("Tentando inserir disciplina no Supabase...");
           const { error: insertError } = await supabase.from("disciplines").insert({
             name: payload.name,
             code: payload.code,
@@ -187,11 +189,16 @@ export function useDisciplineDashboard() {
             created_by: payload.createdBy,
           });
 
+          console.log("Resultado da inserção:", { insertError });
+
           if (insertError) {
             throw insertError;
           }
+          console.log("Disciplina criada com sucesso, recarregando dados...");
           await loadData();
+          console.log("Dados recarregados");
         } else {
+          console.log("Supabase não disponível, usando modo local");
           const newRecord: DisciplineRecord = {
             id: `local-${Date.now()}`,
             name: payload.name,
@@ -228,10 +235,12 @@ export function useDisciplineDashboard() {
           }));
         }
       } catch (err) {
-        console.error(err);
+        console.error("Erro ao criar disciplina:", err);
         setError("Não foi possível cadastrar a disciplina.");
+        alert(`Erro ao criar disciplina: ${err instanceof Error ? err.message : String(err)}`);
         throw err;
       } finally {
+        console.log("createDiscipline finalizando, setUpdating(false)");
         setUpdating(false);
       }
     },

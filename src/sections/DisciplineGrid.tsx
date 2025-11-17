@@ -17,6 +17,7 @@ type DisciplineGridProps = {
   onAssignTutor: (id: string, tutorId: string) => Promise<void> | void;
   getCardPermissions: (discipline: DisciplineRecord) => DisciplineCardPermissions;
   resolveOwnerName?: (userId: string) => string | undefined;
+  onViewDiscipline?: (discipline: DisciplineRecord) => void;
 };
 
 export function DisciplineGrid({
@@ -27,6 +28,7 @@ export function DisciplineGrid({
   onAssignTutor,
   getCardPermissions,
   resolveOwnerName,
+  onViewDiscipline,
 }: DisciplineGridProps) {
   if (disciplines.length === 0) {
     return (
@@ -48,6 +50,7 @@ export function DisciplineGrid({
           onAssignTutor={onAssignTutor}
           permissions={getCardPermissions(discipline)}
           ownerLabel={resolveOwnerName?.(discipline.createdBy)}
+          onView={onViewDiscipline}
         />
       ))}
     </section>

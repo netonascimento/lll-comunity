@@ -84,18 +84,19 @@ export function useCourseManager(
           period,
           starts_at,
           ends_at,
-          mentor,
-          students_count
+          mentor
         )
       `
       );
 
     if (selectError) {
-      console.error(selectError);
+      console.error("Error loading courses:", selectError);
       setError(selectError.message ?? "Não foi possível carregar os cursos.");
       setLoading(false);
       return;
     }
+    
+    console.log("Courses loaded:", data);
 
     const courses: CourseRecord[] =
       data?.map((row: any) => ({
@@ -109,15 +110,18 @@ export function useCourseManager(
           .filter(
             (disc: DisciplineRecord | null): disc is DisciplineRecord => Boolean(disc)
           ),
-        turmas: (row.turmas ?? []).map((turma: any) => ({
-          id: turma.id,
-          name: turma.name,
-          period: turma.period,
-          startsAt: turma.starts_at,
-          endsAt: turma.ends_at,
-          mentor: turma.mentor ?? undefined,
-          students: turma.students_count ?? 0,
-        })),
+        turmas: (row.turmas ?? []).map((turma: any) => {
+          console.log("Mapping turma:", turma);
+          return {
+            id: turma.id,
+            name: turma.name,
+            period: turma.period,
+            startsAt: turma.starts_at ?? undefined,
+            endsAt: turma.ends_at ?? undefined,
+            mentor: turma.mentor ?? undefined,
+            students: 0, // TODO: implementar contagem de alunos
+          };
+        }),
       })) ?? [];
 
     let studentCourses: CourseRecord[] = [];
@@ -174,6 +178,27 @@ export function useCourseManager(
               .insert(rows);
             if (relError) throw new Error(relError.message);
           }
+          
+          // Otimistic update - adiciona o novo curso imediatamente
+          const disciplines = disciplinePool.filter((disc: DisciplineRecord) =>
+            payload.disciplineIds.includes(disc.id)
+          );
+          const newCourse: CourseRecord = {
+            id: data.id,
+            name: payload.name,
+            description: payload.description,
+            coverUrl: payload.coverUrl,
+            createdBy: payload.createdBy,
+            disciplines,
+            turmas: [],
+          };
+          
+          setState((prev) => ({
+            ...prev,
+            courses: [newCourse, ...prev.courses],
+          }));
+          
+          // Depois recarrega para garantir sincronização
           await loadCourses();
         } else {
           const disciplines = disciplinePool.filter((disc: DisciplineRecord) =>
@@ -198,11 +223,13 @@ export function useCourseManager(
       } catch (err) {
         console.error(err);
         setError(err instanceof Error ? err.message : "Não conseguimos criar este curso.");
+        // Recarrega para descartar qualquer estado inconsistente
+        await loadCourses();
       } finally {
         setUpdating(false);
       }
     },
-    [loadCourses]
+    [loadCourses, disciplinePool]
   );
 
   const createTurma = useCallback(
@@ -211,17 +238,47 @@ export function useCourseManager(
       setError(null);
       try {
         if (supabase) {
-          const { error: insertError } = await supabase.from("courses_turmas").insert({
-            course_id: payload.courseId,
+          const { data, error: insertError } = await supabase
+            .from("courses_turmas")
+            .insert({
+              course_id: payload.courseId,
+              name: payload.name,
+              period: payload.period,
+              starts_at: payload.startsAt,
+              ends_at: payload.endsAt || null,
+              mentor: payload.mentor || null,
+            })
+            .select("id")
+            .single();
+          
+          if (insertError || !data) {
+            throw new Error(insertError?.message || "Falha ao criar turma");
+          }
+          
+          // Otimistic update - adiciona turma imediatamente
+          const newTurma: CourseTurma = {
+            id: data.id,
             name: payload.name,
             period: payload.period,
-            starts_at: payload.startsAt,
-            ends_at: payload.endsAt,
+            startsAt: payload.startsAt,
+            endsAt: payload.endsAt,
             mentor: payload.mentor,
-          });
-          if (insertError) {
-            throw new Error(insertError.message);
-          }
+            students: 0,
+          };
+          
+          setState((prev) => ({
+            ...prev,
+            courses: prev.courses.map((course) =>
+              course.id === payload.courseId
+                ? {
+                    ...course,
+                    turmas: [...course.turmas, newTurma],
+                  }
+                : course
+            ),
+          }));
+          
+          // Depois recarrega para garantir sincronização
           await loadCourses();
         } else {
           setState((prev) => ({
@@ -250,6 +307,8 @@ export function useCourseManager(
       } catch (err) {
         console.error(err);
         setError(err instanceof Error ? err.message : "Falha ao criar turma.");
+        // Recarrega em caso de erro para garantir consistência
+        await loadCourses();
       } finally {
         setUpdating(false);
       }

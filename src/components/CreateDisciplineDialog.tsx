@@ -23,6 +23,31 @@ const makeDefaultBlock = (): LearningBlock => ({
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
 
+// Gera código automaticamente baseado no nome da disciplina
+const generateDisciplineCode = (name: string): string => {
+  // Remove acentos e caracteres especiais
+  const normalized = name
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase();
+  
+  // Pega as primeiras letras de cada palavra (máximo 6 caracteres)
+  const words = normalized.split(/\s+/).filter(Boolean);
+  let code = "";
+  
+  if (words.length === 1) {
+    // Se for uma palavra só, pega as primeiras 3-6 letras
+    code = words[0].slice(0, 6);
+  } else {
+    // Se for múltiplas palavras, pega iniciais
+    code = words.map(w => w[0]).join("").slice(0, 6);
+  }
+  
+  // Adiciona timestamp curto para garantir unicidade
+  const timestamp = Date.now().toString().slice(-4);
+  return `${code}-${timestamp}`;
+};
+
 export function CreateDisciplineDialog({
   open,
   onClose,
@@ -32,7 +57,6 @@ export function CreateDisciplineDialog({
 }: CreateDisciplineDialogProps) {
   const [formState, setFormState] = useState({
     name: "",
-    code: "",
     level: "",
     status: "planejamento" as CreateDisciplinePayload["status"],
     description: "",
@@ -47,9 +71,6 @@ export function CreateDisciplineDialog({
     const issues: string[] = [];
     if (formState.name.trim().length <= 3) {
       issues.push("Nome precisa de pelo menos 4 caracteres.");
-    }
-    if (formState.code.trim().length <= 2) {
-      issues.push("Código precisa de pelo menos 3 caracteres.");
     }
     if (formState.description.trim().length <= 10) {
       issues.push("Descreva brevemente a disciplina (mínimo ~10 caracteres).");
@@ -66,7 +87,6 @@ export function CreateDisciplineDialog({
   const resetForm = () => {
     setFormState({
       name: "",
-      code: "",
       level: "",
       status: "planejamento",
       description: "",
@@ -80,11 +100,25 @@ export function CreateDisciplineDialog({
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!validation.valid || !currentUserId) return;
+    console.log("handleSubmit disciplina - validation:", validation);
+    console.log("handleSubmit disciplina - currentUserId:", currentUserId);
+    
+    if (!validation.valid) {
+      alert(`Validação falhou:\n${validation.issues.join("\n")}`);
+      return;
+    }
+    
+    if (!currentUserId) {
+      alert("Usuário não identificado. Faça login novamente.");
+      return;
+    }
 
+    // Gera código automaticamente baseado no nome
+    const autoCode = generateDisciplineCode(formState.name);
+    
     const payload: CreateDisciplinePayload = {
       name: formState.name.trim(),
-      code: formState.code.trim(),
+      code: autoCode,
       level: formState.level.trim(),
       status: formState.status,
       description: formState.description.trim(),
@@ -100,11 +134,14 @@ export function CreateDisciplineDialog({
     };
 
     try {
+      console.log("Chamando onSubmit com payload...");
       await onSubmit(payload);
+      console.log("onSubmit completou com sucesso");
       resetForm();
       onClose();
     } catch (error) {
-      console.error(error);
+      console.error("Erro no handleSubmit:", error);
+      alert(`Erro ao criar disciplina: ${error instanceof Error ? error.message : String(error)}`);
     }
   };
 
@@ -144,17 +181,6 @@ export function CreateDisciplineDialog({
               />
             </label>
             <label className="text-xs text-slate-400">
-              Código
-              <input
-                className="mt-1 w-full rounded-2xl bg-black/20 px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-brand-400"
-                value={formState.code}
-                onChange={(event) =>
-                  setFormState((prev) => ({ ...prev, code: event.target.value }))
-                }
-                required
-              />
-            </label>
-            <label className="text-xs text-slate-400">
               Nível
               <input
                 className="mt-1 w-full rounded-2xl bg-black/20 px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-brand-400"
@@ -162,6 +188,7 @@ export function CreateDisciplineDialog({
                 onChange={(event) =>
                   setFormState((prev) => ({ ...prev, level: event.target.value }))
                 }
+                placeholder="Ex: Básico, Intermediário, Avançado"
               />
             </label>
             <label className="text-xs text-slate-400">

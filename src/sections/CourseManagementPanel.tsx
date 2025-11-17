@@ -41,6 +41,11 @@ export function CourseManagementPanel({
     { name: string; period: string; startsAt: string; endsAt: string; mentor: string }
   >>({});
 
+  // Helper to get or initialize turma form
+  const getTurmaForm = (courseId: string) => {
+    return turmaForms[courseId] || { name: "", period: "", startsAt: "", endsAt: "", mentor: "" };
+  };
+
   const orderedDisciplines = useMemo(
     () =>
       [...disciplines].sort((a, b) => a.name.localeCompare(b.name, "pt-BR", { sensitivity: "base" })),
@@ -81,6 +86,7 @@ export function CourseManagementPanel({
       setForm({ name: "", description: "", coverUrl: "", disciplineIds: [] });
     } catch (submitError) {
       console.error("Failed to create course:", submitError);
+      alert(`Erro ao criar curso: ${submitError instanceof Error ? submitError.message : "Tente novamente"}`);
       // Keep form data so user can try again
     } finally {
       setSubmitting(false);
@@ -104,19 +110,42 @@ export function CourseManagementPanel({
 
   const handleTurmaSubmit = async (courseId: string) => {
     const values = turmaForms[courseId];
-    if (!values || !values.name || !values.period) return;
-    await onCreateTurma({
-      courseId,
-      name: values.name,
-      period: values.period,
-      startsAt: values.startsAt,
-      endsAt: values.endsAt,
-      mentor: values.mentor || undefined,
-    });
-    setTurmaForms((prev) => ({
-      ...prev,
-      [courseId]: { name: "", period: "", startsAt: "", endsAt: "", mentor: "" },
-    }));
+    
+    // Validate required fields
+    if (!values?.name?.trim()) {
+      alert("Nome da turma é obrigatório");
+      return;
+    }
+    
+    if (!values?.period?.trim()) {
+      alert("Período é obrigatório");
+      return;
+    }
+    
+    if (!values?.startsAt?.trim()) {
+      alert("Data de início é obrigatória");
+      return;
+    }
+    
+    try {
+      await onCreateTurma({
+        courseId,
+        name: values.name,
+        period: values.period,
+        startsAt: values.startsAt,
+        endsAt: values.endsAt?.trim() || undefined,
+        mentor: values.mentor?.trim() || undefined,
+      });
+      
+      // Clear form only if successful
+      setTurmaForms((prev) => ({
+        ...prev,
+        [courseId]: { name: "", period: "", startsAt: "", endsAt: "", mentor: "" },
+      }));
+    } catch (error) {
+      console.error("Failed to create turma:", error);
+      alert(`Erro ao criar turma: ${error instanceof Error ? error.message : "Tente novamente"}`);
+    }
   };
 
   return (
@@ -279,10 +308,12 @@ export function CourseManagementPanel({
                           {turma.period} · {turma.students} alunos · mentor{" "}
                           {turma.mentor ?? "—"}
                         </p>
-                        <p>
-                          {new Date(turma.startsAt).toLocaleDateString("pt-BR")} -{" "}
-                          {new Date(turma.endsAt).toLocaleDateString("pt-BR")}
-                        </p>
+                        {(turma.startsAt || turma.endsAt) && (
+                          <p>
+                            {turma.startsAt ? new Date(turma.startsAt).toLocaleDateString("pt-BR") : "—"} -{" "}
+                            {turma.endsAt ? new Date(turma.endsAt).toLocaleDateString("pt-BR") : "—"}
+                          </p>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -302,12 +333,12 @@ export function CourseManagementPanel({
                     <input
                       className="w-full rounded-xl bg-white/5 px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-brand-400"
                       placeholder="Nome da turma"
-                      value={turmaForms[course.id]?.name ?? ""}
+                      value={getTurmaForm(course.id).name}
                       onChange={(event) =>
                         setTurmaForms((prev) => ({
                           ...prev,
                           [course.id]: {
-                            ...prev[course.id],
+                            ...getTurmaForm(course.id),
                             name: event.target.value,
                           },
                         }))
@@ -316,12 +347,12 @@ export function CourseManagementPanel({
                     <input
                       className="w-full rounded-xl bg-white/5 px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-brand-400"
                       placeholder="Período (ex.: 2024.2)"
-                      value={turmaForms[course.id]?.period ?? ""}
+                      value={getTurmaForm(course.id).period}
                       onChange={(event) =>
                         setTurmaForms((prev) => ({
                           ...prev,
                           [course.id]: {
-                            ...prev[course.id],
+                            ...getTurmaForm(course.id),
                             period: event.target.value,
                           },
                         }))
@@ -329,16 +360,17 @@ export function CourseManagementPanel({
                     />
                     <div className="grid grid-cols-2 gap-2">
                       <label className="text-[11px]">
-                        Início
+                        Início <span className="text-rose-400">*</span>
                         <input
                           type="date"
+                          required
                           className="w-full rounded-xl bg-white/5 px-2 py-1 text-sm text-white outline-none focus:ring-2 focus:ring-brand-400"
-                          value={turmaForms[course.id]?.startsAt ?? ""}
+                          value={getTurmaForm(course.id).startsAt}
                           onChange={(event) =>
                             setTurmaForms((prev) => ({
                               ...prev,
                               [course.id]: {
-                                ...prev[course.id],
+                                ...getTurmaForm(course.id),
                                 startsAt: event.target.value,
                               },
                             }))
@@ -346,16 +378,16 @@ export function CourseManagementPanel({
                         />
                       </label>
                       <label className="text-[11px]">
-                        Fim
+                        Fim (opcional)
                         <input
                           type="date"
                           className="w-full rounded-xl bg-white/5 px-2 py-1 text-sm text-white outline-none focus:ring-2 focus:ring-brand-400"
-                          value={turmaForms[course.id]?.endsAt ?? ""}
+                          value={getTurmaForm(course.id).endsAt}
                           onChange={(event) =>
                             setTurmaForms((prev) => ({
                               ...prev,
                               [course.id]: {
-                                ...prev[course.id],
+                                ...getTurmaForm(course.id),
                                 endsAt: event.target.value,
                               },
                             }))
@@ -366,12 +398,12 @@ export function CourseManagementPanel({
                     <input
                       className="w-full rounded-xl bg-white/5 px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-brand-400"
                       placeholder="Mentor responsável"
-                      value={turmaForms[course.id]?.mentor ?? ""}
+                      value={getTurmaForm(course.id).mentor}
                       onChange={(event) =>
                         setTurmaForms((prev) => ({
                           ...prev,
                           [course.id]: {
-                            ...prev[course.id],
+                            ...getTurmaForm(course.id),
                             mentor: event.target.value,
                           },
                         }))

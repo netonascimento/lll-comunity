@@ -14,8 +14,8 @@ export interface CourseTurma {
   id: string;
   name: string;
   period: string;
-  startsAt: string;
-  endsAt: string;
+  startsAt?: string;
+  endsAt?: string;
   mentor?: string;
   students: number;
 }
@@ -44,6 +44,6 @@ export interface CreateTurmaPayload {
   name: string;
   period: string;
   startsAt: string;
-  endsAt: string;
+  endsAt?: string;
   mentor?: string;
 }
